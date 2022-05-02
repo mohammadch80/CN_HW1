@@ -223,14 +223,51 @@ def handle(cli: socket.socket):
         except socket.error:
             print("Error in handling")
             clients.remove(cli)
+            for g in games:
+                if (g.user1 == cli) | (g.user2 == cli) | (g.tic_server == cli):
+                    games.remove(g)
+                    feed = '{"type":"finish", "message":"The game interrupt.", "table":[[-1, -1, -1], [-1, -1, -1], [-1, -1, -1]]}'
+                    if g.user1 != cli:
+                        g.user1.send(feed.encode('ascii'))
+                    if g.user2 != cli and g.user2:
+                        g.user2.send(feed.encode('ascii'))
+                    for ser in ready_servers:
+                        if ser.tic_server == g.tic_server:
+                            ser.status = "WAIT"
+                            break
+                    break
+            for ser in ready_servers:
+                if ser.tic_server == cli:
+                    ready_servers.remove(ser)
+                    break
+            if cli in waiting_doubles:
+                waiting_doubles.remove(cli)
+            elif cli in waiting_singles:
+                waiting_singles.remove(cli)
             cli.close()
             break
 
 
-while True:
-    client, address = web_server.accept()
-    print(f'connecting with {address}')
+def res():
+    while True:
+        client, address = web_server.accept()
+        print(f'connecting with {address}')
 
-    clients.append(client)
-    thread = threading.Thread(target=handle, args=(client,))
-    thread.start()
+        clients.append(client)
+        thread = threading.Thread(target=handle, args=(client,))
+        thread.start()
+
+
+def echo():
+    while True:
+        cam = input()
+        if cam == '/users':
+            print("number of users: " + str(len(clients) - len(ready_servers)))
+        else:
+            print("please enter valid command: /users")
+
+
+client_thread = threading.Thread(target=res)
+client_thread.start()
+echo_thread = threading.Thread(target=echo)
+echo_thread.start()
