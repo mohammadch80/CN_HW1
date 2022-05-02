@@ -12,12 +12,14 @@ def num_validity(move: (int, int)):
 
 class tic_tac_toe:
     table = []
+    is_single = True
     turn = 0
     chat = []
 
-    def __init__(self):
+    def __init__(self, single: bool):
         self.table = [[-1, -1, -1], [-1, -1, -1], [-1, -1, -1]]
         self.turn = 1
+        self.is_single = single
         self.chat = []
 
     def check_finished(self, turn_id: int, move: (int, int)):
@@ -62,7 +64,7 @@ class tic_tac_toe:
 tic_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 tic_server.connect((host, port))
 
-current_game = tic_tac_toe()
+current_game = tic_tac_toe(True)
 
 
 def get_message():
@@ -84,43 +86,59 @@ def get_message():
             print(f'received message:{message}')
             ty = message["type"]
             if ty == 'INIT':
-                current_game = tic_tac_toe()
+                current_game = tic_tac_toe(message["single"])
+            elif ty == 'forfeit':
+                feedback = '{"type":"finish", "message":"player ' + str(3-message["sender"]) + ' won the game.", "table":' + str(
+                    current_game.table) + ', "rec":[1,2]}'
+                tic_server.send(feedback.encode('ascii'))
             elif ty == 'move':
+                if message["sender"] != current_game.turn:
+                    feedback = '{"type":"error", "message":"this is not your turn. please wait...", "table":' + str(
+                        current_game.table) + ', "rec":[' + str(message["sender"]) + ']}'
+                    tic_server.send(feedback.encode('ascii'))
+                    continue
                 r, c = int(message["raw"]) - 1, int(message["column"]) - 1
+                this_turn = current_game.turn
                 if not num_validity((r, c)):
                     feedback = '{"type":"error", "message":"choice range is invalid.", "table":' + str(
-                        current_game.table) + '}'
+                        current_game.table) + ', "rec":[' + str(this_turn) + ']}'
                     tic_server.send(feedback.encode('ascii'))
                 elif not current_game.move_validity((r, c)):
                     feedback = '{"type":"error", "message":"choice range is not empty.", "table":' + str(
-                        current_game.table) + '}'
+                        current_game.table) + ', "rec":[' + str(this_turn) + ']}'
                     tic_server.send(feedback.encode('ascii'))
                 else:
-                    current_game.play_round(1, (r, c))
-                    win = current_game.check_finished(1, (r, c))
+                    current_game.play_round(this_turn, (r, c))
+                    win = current_game.check_finished(this_turn, (r, c))
                     if win:
-                        feedback = '{"type":"finish", "message":"You won the game.", "table":' + str(
-                            current_game.table) + '}'
+                        feedback = '{"type":"finish", "message":"player ' + str(this_turn) + ' won the game.", "table":'\
+                                   + str(current_game.table) + ', "rec":[1,2]}'
                         tic_server.send(feedback.encode('ascii'))
                     elif current_game.is_draw():
                         feedback = '{"type":"finish", "message":"The game ended in a draw.", "table":' + \
-                                   str(current_game.table) + '}'
+                                   str(current_game.table) + ', "rec":[1,2]}'
                         tic_server.send(feedback.encode('ascii'))
-                    else:
+                    elif current_game.is_single:
                         r, c = current_game.play_random(2)
                         lost = current_game.check_finished(2, (r, c))
                         if lost:
-                            feedback = '{"type":"finish", "message":"You lost the game.", "table":' + \
-                                       str(current_game.table) + '}'
+                            feedback = '{"type":"finish", "message":"player 2 won the game.", "table":' + \
+                                       str(current_game.table) + ', "rec":[1]}'
                             tic_server.send(feedback.encode('ascii'))
                         else:
                             feedback = '{"type":"feedback", "message":"the cell was successfully selected.", ' \
-                                       '"table":' + str(current_game.table) + '}'
+                                       '"table":' + str(current_game.table) + ', "rec":[1]}'
                             tic_server.send(feedback.encode('ascii'))
+                    else:
+                        current_game.turn = 3 - current_game.turn
+                        feedback = '{"type":"feedback", "message":"the cell was successfully selected by player ' + \
+                                   str(this_turn) + '.", "table":' + str(current_game.table) + ', "rec":[1,2]}'
+                        tic_server.send(feedback.encode('ascii'))
+                        pass
             elif ty == 'send':
-                current_game.chat.append(message["sender"] + ": " + message["message"])
+                current_game.chat.append("player" + str(message["sender"]) + ": " + message["message"])
             elif ty == 'get':
-                feedback = '{"type":"chat", "chat":' + json.dumps(current_game.chat) + '}'
+                feedback = '{"type":"chat", "chat":' + json.dumps(current_game.chat) + ', "rec":[' + str(message["sender"]) + ']}'
                 tic_server.send(feedback.encode('ascii'))
         except socket.error:
             print("server closed.")

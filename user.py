@@ -7,7 +7,7 @@ states = ["READY", "WAIT", "ON_GAME"]
 state = 0
 
 valid_commands = {
-    "READY": "/start",
+    "READY": "/start_single , /start_double",
     "WAIT": "/exit",
     "ON_GAME": "/exit , /send [your_message] , /get , /select [123] [123]  # (1st number is row and 2nd is column.)",
 }
@@ -24,12 +24,12 @@ user.connect((host, port))
 
 def echo():
     global state, states
-    print("enter '/start' to play game.")
+    print("enter '/start_single' or '/start_double' to play.")
     while True:
         command = input()
-        if command == '/start':
+        if command in ['/start_single', '/start_double']:
             if states[state] == 'READY':
-                message = '{"type":"start_game"}'
+                message = '{"type":"' + str(command[1:]) + '_game"}'
                 user.send(message.encode('ascii'))
             elif states[state] == 'WAIT':
                 print('please wait ...')
@@ -76,7 +76,7 @@ def read():
         try:
             message = json.loads(user.recv(1024).decode("ascii"))
             if message["type"] == 'accept':
-                print("server is ready to play game.")
+                print("game started. you are player %d" % message["player"])
                 state = 2
                 table = message["table"]
                 print("*** N is empty. X is 1st player. O is 2nd player. ***")
